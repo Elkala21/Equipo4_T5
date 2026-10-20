@@ -1,4 +1,26 @@
-﻿build/
-sdkconfig.old
+﻿# --- ESP-IDF: archivos generados al compilar ---
+build/
 managed_components/
-dependencies.lock
+sdkconfig.old
+
+# --- IDE / editor (configuración local de cada persona) ---
+# Eclipse / Espressif-IDE
+.metadata/
+.settings/
+.project
+.cproject
+# VS Code
+.vscode/
+# clangd (contiene rutas absolutas de tu PC)
+.clangd
+.cache/
+
+# --- Sistema operativo ---
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Varios ---
+*.log
+*.tmp
+*.bak

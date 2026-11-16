@@ -1,17 +1,16 @@
-# See the build system documentation in IDF programming guide
-# for more information about component CMakeLists.txt files.
-
+# Componente principal. Cada carpeta es una capa del sistema embebido:
+#   .            main / RTOS (tareas FreeRTOS y comandos de la HMI)
+#   perceptron/  capa Perceptron (sin hardware; se puede probar en PC)
+#   bsp/         Board Support Package (BSP.h, ADC.c, GPIO.c, PRINT.c)
 idf_component_register(
-    SRCS 
-        "main.c"          # list the source files of this component
-        "adc.c"
-        "display.c"
-        "input.c"
-        "lms.c"
-        "patterns.c"
-        "perceptron.c"
-    INCLUDE_DIRS        # optional, add here public include directories
-    PRIV_INCLUDE_DIRS   # optional, add here private include directories
-    REQUIRES            # optional, list the public requirements (component names)
-    PRIV_REQUIRES       # optional, list the private requirements
+    SRCS
+        "main.c"
+        "perceptron/perceptron.c"
+        "perceptron/lms.c"
+        "perceptron/patterns.c"
+        "bsp/ADC.c"
+        "bsp/GPIO.c"
+        "bsp/PRINT.c"
+    INCLUDE_DIRS "." "bsp" "perceptron"
+    REQUIRES driver esp_adc esp_timer esp_driver_uart esp_driver_usb_serial_jtag
 )

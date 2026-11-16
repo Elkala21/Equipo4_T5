@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Perceptrón LMS · HMI</title>
+<meta name="description" content="Interfaz de usuario (HMI) del nodo de monitoreo de voltaje con perceptrón simple LMS en ESP32. Equipo 4.">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<!-- ===================== Encabezado ===================== -->
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="18" cy="12" r="3"/><path d="M7 6.8l8.2 4M7 17.2l8.2-4"/></svg>
+      </div>
+      <div>
+        <h1>Perceptrón simple · LMS</h1>
+        <p>Nodo de monitoreo de voltaje y control ON-OFF · Equipo 4</p>
+      </div>
+    </div>
+    <div class="grow"></div>
+    <span class="chip" id="chipPlaca" title="Placa conectada"><span class="dot"></span><span>Placa: —</span></span>
+    <span class="chip" id="chipConn"><span class="dot" id="connDot"></span><span id="connTxt">Desconectado</span></span>
+    <button class="btn primary" id="btnConn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v5"/></svg>
+      <span>Conectar</span>
+    </button>
+    <button class="btn" id="btnDemo" title="Simula el ESP32 en el navegador, sin placa">Modo demo</button>
+    <button class="btn icon" id="btnTema" title="Cambiar tema claro / oscuro" aria-label="Cambiar tema">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+    </button>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Secciones">
+    <button class="tab" role="tab" data-tab="monitor" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Monitoreo</button>
+    <button class="tab" role="tab" data-tab="train" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18M7 15l4-5 3 3 5-7"/></svg>Entrenamiento</button>
+    <button class="tab" role="tab" data-tab="model" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="18" cy="12" r="3"/><path d="M7 6.8l8.2 4M7 17.2l8.2-4"/></svg>Modelo</button>
+    <button class="tab" role="tab" data-tab="system" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>Sistema</button>
+    <button class="tab" role="tab" data-tab="console" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17l6-5-6-5M12 19h8"/></svg>Consola</button>
+  </nav>
+</header>
+
+<div class="banner demo hide" id="demoBanner"><div><b>MODO DEMO (SIMULADO).</b> Los datos no vienen de la placa: no uses estas pantallas como evidencia del reporte.</div></div>
+<div class="banner info hide" id="noSerial"><div>Este navegador no soporta Web Serial. Abre la página con <b>Chrome</b> o <b>Edge</b> para conectar la placa (el modo demo funciona en cualquiera).</div></div>
+<div class="banner info" id="hello"><div>Conecta el ESP32 por USB, cierra el monitor serie de VS Code y pulsa <b>Conectar</b>. Para explorar sin placa, usa <b>Modo demo</b>.</div></div>
+
+<main>
+  <!-- ===================== 1. Monitoreo ===================== -->
+  <section class="panel on" id="tab-monitor" role="tabpanel">
+    <div class="card span-3 kpi">
+      <span class="lbl">Modo del sistema</span>
+      <div class="val"><span id="kModo">OFF</span>
+        <button class="switch" id="swModo" role="switch" aria-checked="false" aria-label="Modo RUN" disabled></button></div>
+      <span class="hint" id="kModoHint">Equivale al botón físico</span>
+    </div>
+    <div class="card span-3 kpi">
+      <span class="lbl">Patrón de entrada</span>
+      <div class="val"><span class="bits-big" id="kPatBits">—</span></div>
+      <span class="hint" id="kPat">x<sub>N-1</sub> … x<sub>0</sub></span>
+    </div>
+    <div class="card span-3 kpi">
+      <span class="lbl">Salida del perceptrón</span>
+      <div class="val"><span id="kY">—</span><span class="badge" id="kYBadge">sin modelo</span></div>
+      <span class="hint" id="kYHint">y = 1 si a ≥ θ</span>
+    </div>
+    <div class="card span-3 kpi">
+      <span class="lbl">Umbral del ADC</span>
+      <div class="val"><span id="kUmbral">—</span></div>
+      <span class="hint" id="kUmbralHint">raw de 0 a 4095</span>
+    </div>
+
+    <div class="card span-8">
+      <div class="card-h"><h2>Potenciómetros</h2><span class="sub" id="potsSub">Lectura del ADC1 y su codificación en 0 / 1</span></div>
+      <div class="pots" id="pots"><div class="empty">Sin datos. Conecta la placa o inicia el modo demo.</div></div>
+      <div class="field" style="margin:16px 0 0">
+        <span>Umbral de binarización: <b id="umbralVal" class="num">2048</b> <span class="muted" id="umbralV"></span></span>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input type="range" id="umbral" min="100" max="3995" step="1" value="2048" style="flex:1;accent-color:var(--accent)" aria-label="Umbral del ADC">
+          <button class="btn sm" id="btnUmbral" disabled>Aplicar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card span-4">
+      <div class="card-h"><h2>Salidas físicas</h2></div>
+      <div class="leds" style="flex-direction:column;align-items:flex-start;gap:16px">
+        <div class="led green" id="ledGreen"><i></i><div><b>LED de estado</b><small id="ledGreenPin">verde · modo RUN</small></div></div>
+        <div class="led blue" id="ledBlue"><i></i><div><b>LED de salida</b><small id="ledBluePin">azul · salida y</small></div></div>
+      </div>
+      <div class="note" style="margin-top:18px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+        <span>Con el sistema en <b>RUN</b>, el LED azul enciende cuando el perceptrón entrenado responde y = 1 al patrón de los potenciómetros.</span>
+      </div>
+    </div>
+
+    <div class="card span-12">
+      <div class="card-h"><h2>Historial de voltaje</h2><span class="sub">últimos 30 s · pasa el cursor para ver los valores</span>
+        <span class="grow"></span><button class="btn sm" id="btnPausa">Pausar</button><button class="btn sm" id="btnCsvLect">Exportar CSV</button></div>
+      <div class="legend" id="legHist"></div>
+      <div class="chart" id="chHist"><canvas height="260"></canvas><div class="tip"></div></div>
+      <div class="card-h" style="margin:14px 0 6px"><h2 style="font-size:13px">Salida y del perceptrón</h2></div>
+      <div class="chart" id="chY"><canvas height="70"></canvas><div class="tip"></div></div>
+    </div>
+  </section>
+
+  <!-- ===================== 2. Entrenamiento ===================== -->
+  <section class="panel" id="tab-train" role="tabpanel">
+    <div class="card span-5">
+      <div class="card-h"><h2>Configuración</h2></div>
+      <div class="field"><span>Número de potenciómetros (N)</span>
+        <div class="seg" id="segN" role="group" aria-label="Número de potenciómetros">
+          <button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button><button data-n="5">5</button>
+        </div>
+      </div>
+      <div class="field"><span>Tabla de verdad</span>
+        <div class="presets" id="presets">
+          <button class="btn sm" data-p="OR">OR</button><button class="btn sm" data-p="AND">AND</button>
+          <button class="btn sm" data-p="NOR">NOR</button><button class="btn sm" data-p="NAND">NAND</button>
+          <button class="btn sm" data-p="MAY">Mayoría</button><button class="btn sm" data-p="X0">Copia x0</button>
+          <button class="btn sm" data-p="XOR">XOR</button><button class="btn sm" data-p="CUSTOM">Personalizada</button>
+        </div>
+      </div>
+      <div class="field"><span>Salida deseada d por patrón <span class="muted" style="font-weight:400">(haz clic en d para editar)</span></span>
+        <div class="tt-wrap"><table id="ttEdit"></table></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn primary" id="btnTrain" disabled>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg>Entrenar (LMS)</button>
+        <span class="muted" style="font-size:13px">η = 0.1 · tolerancia ΔMSE &lt; 10<sup>-6</sup> · máx. 2000 épocas</span>
+      </div>
+      <div id="cfgMsg"></div>
+    </div>
+
+    <div class="card span-7">
+      <div class="card-h"><h2>Curva de aprendizaje</h2><span class="sub">error cuadrático medio por época</span>
+        <span class="grow"></span>
+        <label class="check"><input type="checkbox" id="chkLog"> escala log</label></div>
+      <div class="chart" id="chMse"><canvas height="280"></canvas><div class="tip"></div></div>
+      <div class="progress" aria-hidden="true"><div id="trainBar"></div></div>
+      <div class="tiles" style="margin-top:14px" id="trainTiles"></div>
+      <div id="trainMsg"></div>
+    </div>
+
+    <div class="card span-12">
+      <div class="card-h"><h2>Historial de entrenamientos</h2><span class="sub">esta sesión</span><span class="grow"></span>
+        <button class="btn sm" id="btnCsvHist">Exportar CSV</button></div>
+      <div style="overflow-x:auto"><table id="tbHist">
+        <thead><tr><th>#</th><th>Hora</th><th>N</th><th>Tabla d</th><th>Épocas</th><th>MSE</th><th>θ</th><th>Aciertos</th><th>Pesos w</th><th>b</th></tr></thead>
+        <tbody><tr><td colspan="10" class="muted">Aún no hay entrenamientos.</td></tr></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== 3. Modelo ===================== -->
+  <section class="panel" id="tab-model" role="tabpanel">
+    <div class="card span-7">
+      <div class="card-h"><h2>Perceptrón en vivo</h2><span class="sub">grosor = |peso| · azul positivo, rojo negativo</span></div>
+      <svg class="neuron" id="neuron" viewBox="0 0 640 330" role="img" aria-label="Diagrama del perceptrón"></svg>
+    </div>
+    <div class="card span-5">
+      <div class="card-h"><h2>Pesos y sesgo</h2></div>
+      <div class="legend"><span><span class="sw box" style="background:var(--pos);display:inline-block;vertical-align:-1px"></span> positivo</span><span><span class="sw box" style="background:var(--neg);display:inline-block;vertical-align:-1px"></span> negativo</span></div>
+      <div class="chart" id="chW"><canvas height="230"></canvas><div class="tip"></div></div>
+      <div class="formula" style="margin-top:12px">
+        a = w·x + b<br>e = d − a<br>w ← w + η·e·x &nbsp;&nbsp; b ← b + η·e<br>y = 1 si a ≥ θ
+      </div>
+    </div>
+    <div class="card span-7">
+      <div class="card-h"><h2>Salida lineal a por patrón</h2><span class="sub">la línea punteada es θ: arriba → y = 1</span></div>
+      <div class="legend"><span><span class="sw box" style="background:var(--s1);display:inline-block;vertical-align:-1px"></span> d = 1</span><span><span class="sw box" style="background:var(--s2);display:inline-block;vertical-align:-1px"></span> d = 0</span><span><span class="sw dash" style="display:inline-block;width:16px;vertical-align:3px"></span> θ</span></div>
+      <div class="chart" id="chA"><canvas height="260"></canvas><div class="tip"></div></div>
+    </div>
+    <div class="card span-5">
+      <div class="card-h"><h2>Frontera de decisión</h2><span class="sub" id="fronteraSub">solo para N = 2</span></div>
+      <div class="chart" id="chF"><canvas height="300"></canvas><div class="tip"></div></div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. Sistema ===================== -->
+  <section class="panel" id="tab-system" role="tabpanel">
+    <div class="card span-7">
+      <div class="card-h"><h2>Arquitectura del sistema embebido</h2></div>
+      <div class="layers">
+        <div class="layer"><div class="name"><i style="background:var(--ink)"></i>HMI</div>
+          <div><div class="files"><code>hmi/index.html</code><code>hmi/css/estilos.css</code><code>hmi/js/*.js</code></div>
+          <p>Software de aplicación: esta página. Habla con el ESP32 por Web Serial con un protocolo de texto.</p></div></div>
+        <div class="layer"><div class="name"><i style="background:var(--s1)"></i>Perceptrón</div>
+          <div><div class="files"><code>perceptron.c</code><code>lms.c</code><code>patterns.c</code></div>
+          <p>Pesos N+1 en memoria dinámica, entrenamiento LMS, tablas de verdad e inferencia. Sin hardware.</p></div></div>
+        <div class="layer"><div class="name"><i style="background:var(--s3)"></i>main / RTOS</div>
+          <div><div class="files"><code>main.c</code></div>
+          <p>Tareas FreeRTOS: modo, adc, print y cmd. Un mutex protege el estado compartido.</p></div></div>
+        <div class="layer"><div class="name"><i style="background:var(--s4)"></i>BSP</div>
+          <div><div class="files"><code>BSP.h</code><code>ADC.c</code><code>GPIO.c</code><code>PRINT.c</code></div>
+          <p>Pines, ADC1 oneshot con calibración, GPIO con ISR y debounce, consola serie.</p></div></div>
+        <div class="layer"><div class="name"><i style="background:var(--s5)"></i>Drivers</div>
+          <div><div class="files"><code>esp_adc</code><code>driver/gpio</code><code>driver/uart</code><code>esp_timer</code></div>
+          <p>Controladores de ESP-IDF que usa el BSP.</p></div></div>
+        <div class="layer hw"><div class="name"><i style="background:var(--muted)"></i>Hardware</div>
+          <div><p style="margin:0" id="hwTxt">ESP32 · N potenciómetros · 1 botón · 2 LEDs</p></div></div>
+      </div>
+    </div>
+    <div class="card span-5">
+      <div class="card-h"><h2>Dispositivo</h2></div>
+      <div class="tiles" id="devTiles"></div>
+      <div class="card-h" style="margin-top:18px"><h2>Conexiones</h2><span class="sub" id="pinSub"></span></div>
+      <table id="tbPins"></table>
+    </div>
+    <div class="card span-12">
+      <div class="card-h"><h2>Tareas FreeRTOS</h2></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Tarea</th><th>Periodo</th><th>Prioridad</th><th>Función</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">adc</td><td>50 ms</td><td>4</td><td style="text-align:left">Lee N canales, binariza con histéresis y, en RUN, hace la inferencia y escribe el LED de salida.</td></tr>
+          <tr><td class="mono">modo</td><td>20 ms</td><td>3</td><td style="text-align:left">Atiende el botón (debounce de 200 ms en la ISR) y alterna OFF / RUN.</td></tr>
+          <tr><td class="mono">cmd</td><td>por evento</td><td>3</td><td style="text-align:left">Recibe comandos de esta HMI (N, TABLA, ENTRENAR, MODO, UMBRAL…).</td></tr>
+          <tr><td class="mono">print</td><td>200 ms</td><td>2</td><td style="text-align:left">Envía las lecturas (LECT) a la HMI.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- ===================== 5. Consola ===================== -->
+  <section class="panel" id="tab-console" role="tabpanel">
+    <div class="card span-12">
+      <div class="card-h"><h2>Consola serie</h2><span class="sub">115200 baudios · una línea por mensaje</span><span class="grow"></span>
+        <label class="check"><input type="checkbox" id="chkLect"> mostrar LECT / EPOCA</label>
+        <button class="btn sm" id="btnLogDl">Descargar</button><button class="btn sm" id="btnLogClr">Limpiar</button></div>
+      <pre class="log" id="log" aria-live="polite"></pre>
+      <form class="cmdline" id="cmdForm" autocomplete="off">
+        <input id="cmdIn" placeholder="Escribe un comando (ej. N=3, TABLA=OR, ENTRENAR, MODO=RUN) · ↑↓ historial" aria-label="Comando">
+        <button class="btn primary" id="cmdSend" disabled>Enviar</button>
+      </form>
+      <div class="quick" id="quick">
+        <button class="btn sm" data-c="AYUDA">AYUDA</button><button class="btn sm" data-c="ESTADO">ESTADO</button>
+        <button class="btn sm" data-c="MODO=TOGGLE">MODO=TOGGLE</button><button class="btn sm" data-c="STREAM=0">STREAM=0</button>
+        <button class="btn sm" data-c="STREAM=1">STREAM=1</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>Instituto Tecnológico de Chihuahua · Inteligencia Artificial · Tarea 5: Machine Learning en sistema embebido</footer>
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+
+<!-- Scripts clásicos (no módulos) para que la página funcione abriéndola como archivo -->
+<script src="js/enlace.js"></script>
+<script src="js/graficas.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

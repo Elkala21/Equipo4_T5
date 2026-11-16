@@ -230,7 +230,7 @@ Pulsa el **botón físico** (o el interruptor de *Modo* en la página).
 - En la página, *Salida del perceptrón* muestra `y` y el cálculo `a = … ≥ θ`.
 
 Pulsa el botón otra vez: el sistema vuelve a **OFF** y se apagan ambos LEDs.
-Un solo clic debe cambiar el modo una sola vez, porque el debounce es de 200 ms.
+Un clic cambia el modo una sola vez, aunque mantengas el botón presionado.
 
 ### Prueba 6 · Otras tablas de verdad
 
@@ -365,12 +365,18 @@ N = 3 y lanza cuatro tareas que corren en paralelo:
 Un **mutex** evita que dos tareas modifiquen el perceptrón o las lecturas al
 mismo tiempo. Por ejemplo, impide que `adc` infiera mientras `cmd` cambia N.
 
-### El botón y el debounce (`GPIO.c`)
+### El botón y el debounce (`GPIO.c` y `main.c`)
 
-El botón genera una **interrupción** al presionarse (flanco de bajada, porque
-va a GND con pull-up). La rutina de interrupción ignora cualquier otro flanco
-durante 200 ms (los *rebotes* del contacto) y solo levanta una bandera. La
-tarea `modo` ve la bandera y cambia el modo.
+El botón funciona como **toggle**: cada clic cambia OFF ↔ RUN una sola vez,
+sin importar cuánto tiempo lo mantengas presionado.
+
+1. Va a GND con el **pull-up interno**, así que al presionarlo el pin baja de 1 a 0.
+2. Ese flanco de bajada genera una **interrupción**. La rutina de interrupción
+   ignora los rebotes de los siguientes 200 ms y solo levanta una bandera.
+3. La tarea `modo` ve la bandera, espera 30 ms y confirma que el botón **sigue
+   presionado**, para descartar ruido. Entonces cambia el modo.
+4. Después espera a que el botón quede **suelto** de forma estable (50 ms) y
+   borra la bandera. Así el rebote al soltarlo no cuenta como un segundo clic.
 
 ### La HMI (`hmi/`)
 

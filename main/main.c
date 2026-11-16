@@ -35,6 +35,8 @@
 #include "freertos/semphr.h"
 
 #define T_MODO_MS     20
+#define T_CONFIRMA_MS 30            // el boton debe seguir presionado este tiempo
+#define T_SUELTO_MS   50            // y quedar suelto este tiempo antes del siguiente clic
 #define T_ADC_MS      50
 #define T_PRINT_MS    200
 #define N_INICIAL     3
@@ -284,14 +286,29 @@ static void tarea_cmd(void *arg)
 	}
 }
 
-/* Modo: atiende el boton fisico (el debounce se hace en la ISR) */
+/* Modo: atiende el boton fisico como toggle.
+ * La ISR avisa del flanco de bajada; aqui se confirma que el boton sigue
+ * presionado (descarta ruido) y despues se espera a que se suelte de forma
+ * estable, para que el rebote al soltarlo no cuente como otro clic. */
 static void tarea_modo(void *arg)
 {
 	(void)arg;
+	gen_gpio_strc *btn = &botones[BTN_MODO];
+
 	while(true){
-		if(botones[BTN_MODO].flag_click){
-			botones[BTN_MODO].flag_click = false;
-			cambiar_modo(-1);
+		if(btn->flag_click){
+			vTaskDelay(pdMS_TO_TICKS(T_CONFIRMA_MS));
+			if(!gpio_leer_bit(btn)){                       // sigue en 0: clic real
+				printf("BOTON,clic\n");
+				cambiar_modo(-1);
+
+				int suelto_ms = 0;                         // espera a que se suelte
+				while(suelto_ms < T_SUELTO_MS){
+					vTaskDelay(pdMS_TO_TICKS(10));
+					suelto_ms = gpio_leer_bit(btn) ? suelto_ms + 10 : 0;
+				}
+			}
+			btn->flag_click = false;                       // descarta los rebotes
 		}
 		vTaskDelay(pdMS_TO_TICKS(T_MODO_MS));
 	}
@@ -360,10 +377,12 @@ void app_main(void)
 		return;
 	}
 
-	printf("\nLISTO,proyecto=perceptron_lms,placa=%s,version=2\n", PLACA);
+	printf("\nLISTO,proyecto=perceptron_lms,placa=%s,version=3\n", PLACA);
 
-	xTaskCreate(tarea_modo,  "modo",  2048, NULL, 3, NULL);
-	xTaskCreate(tarea_adc,   "adc",   3072, NULL, 4, NULL);
-	xTaskCreate(tarea_print, "print", 3072, NULL, 2, NULL);
-	xTaskCreate(tarea_cmd,   "cmd",   4096, NULL, 3, NULL);
+	/* Pila en bytes. printf (con numeros flotantes en "cmd") usa bastante pila
+	 * en el ESP32 (Xtensa); con menos de ~4 KB la tarea se desborda y reinicia. */
+	xTaskCreate(tarea_modo,  "modo",  4096, NULL, 3, NULL);
+	xTaskCreate(tarea_adc,   "adc",   4096, NULL, 4, NULL);
+	xTaskCreate(tarea_print, "print", 4096, NULL, 2, NULL);
+	xTaskCreate(tarea_cmd,   "cmd",   6144, NULL, 3, NULL);
 }
